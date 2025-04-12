@@ -1,4 +1,6 @@
-module github.com/consensys/gnark
+module github.com/kabirpesh/CircomToGnark
+
+replace github.com/consensys/gnark => /Users/kabirpeshawaria/Desktop/Coding/CircGnark
 
 go 1.22
 
@@ -9,6 +11,8 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/consensys/bavard v0.1.31-0.20250314194434-b30d4344e6d4
 	github.com/consensys/compress v0.2.5
+	// Note this is auto-added because of the replace on line 3...
+	github.com/consensys/gnark v0.0.0-00010101000000-000000000000
 	github.com/consensys/gnark-crypto v0.17.1-0.20250331132656-820ac1d108bd
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/google/go-cmp v0.6.0

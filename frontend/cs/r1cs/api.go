@@ -30,13 +30,13 @@ import (
 // Arithmetic
 
 // Add returns res = i1+i2+...in
-func (builder *builder) Add(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
+func (builder *Builder) Add(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	// extract frontend.Variables from input
 	vars, s := builder.toVariables(append([]frontend.Variable{i1, i2}, in...)...)
 	return builder.add(vars, false, s, nil)
 }
 
-func (builder *builder) MulAcc(a, b, c frontend.Variable) frontend.Variable {
+func (builder *Builder) MulAcc(a, b, c frontend.Variable) frontend.Variable {
 	// do the multiplication into builder.mbuf1
 	mulBC := func() {
 		// reset the buffer
@@ -88,14 +88,14 @@ func (builder *builder) MulAcc(a, b, c frontend.Variable) frontend.Variable {
 }
 
 // Sub returns res = i1 - i2
-func (builder *builder) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
+func (builder *Builder) Sub(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	// extract frontend.Variables from input
 	vars, s := builder.toVariables(append([]frontend.Variable{i1, i2}, in...)...)
 	return builder.add(vars, true, s, nil)
 }
 
 // returns res = Σ(vars) or res = vars[0] - Σ(vars[1:]) if sub == true.
-func (builder *builder) add(vars []expr.LinearExpression, sub bool, capacity int, res *expr.LinearExpression) frontend.Variable {
+func (builder *Builder) add(vars []expr.LinearExpression, sub bool, capacity int, res *expr.LinearExpression) frontend.Variable {
 	// we want to merge all terms from input linear expressions
 	// if they are duplicate, we reduce; that is, if multiple terms in different vars have the
 	// same variable id.
@@ -172,7 +172,7 @@ func (builder *builder) add(vars []expr.LinearExpression, sub bool, capacity int
 }
 
 // Neg returns -i
-func (builder *builder) Neg(i frontend.Variable) frontend.Variable {
+func (builder *Builder) Neg(i frontend.Variable) frontend.Variable {
 	v := builder.toVariable(i)
 
 	if n, ok := builder.constantValue(v); ok {
@@ -184,7 +184,7 @@ func (builder *builder) Neg(i frontend.Variable) frontend.Variable {
 }
 
 // Mul returns res = i1 * i2 * ... in
-func (builder *builder) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
+func (builder *Builder) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(append([]frontend.Variable{i1, i2}, in...)...)
 
 	mul := func(v1, v2 expr.LinearExpression, first bool) expr.LinearExpression {
@@ -220,7 +220,7 @@ func (builder *builder) Mul(i1, i2 frontend.Variable, in ...frontend.Variable) f
 	return res
 }
 
-func (builder *builder) mulConstant(v1 expr.LinearExpression, lambda constraint.Element, inPlace bool) expr.LinearExpression {
+func (builder *Builder) mulConstant(v1 expr.LinearExpression, lambda constraint.Element, inPlace bool) expr.LinearExpression {
 	// multiplying a frontend.Variable by a constant -> we updated the coefficients in the linear expression
 	// leading to that frontend.Variable
 	var res expr.LinearExpression
@@ -236,7 +236,7 @@ func (builder *builder) mulConstant(v1 expr.LinearExpression, lambda constraint.
 	return res
 }
 
-func (builder *builder) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
+func (builder *Builder) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(i1, i2)
 
 	v1 := vars[0]
@@ -272,7 +272,7 @@ func (builder *builder) DivUnchecked(i1, i2 frontend.Variable) frontend.Variable
 }
 
 // Div returns res = i1 / i2
-func (builder *builder) Div(i1, i2 frontend.Variable) frontend.Variable {
+func (builder *Builder) Div(i1, i2 frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(i1, i2)
 
 	v1 := vars[0]
@@ -310,7 +310,7 @@ func (builder *builder) Div(i1, i2 frontend.Variable) frontend.Variable {
 }
 
 // Inverse returns res = inverse(v)
-func (builder *builder) Inverse(i1 frontend.Variable) frontend.Variable {
+func (builder *Builder) Inverse(i1 frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(i1)
 
 	if c, ok := builder.constantValue(vars[0]); ok {
@@ -342,7 +342,7 @@ func (builder *builder) Inverse(i1 frontend.Variable) frontend.Variable {
 // n default value is fr.Bits the number of bits needed to represent a field element
 //
 // The result is in little endian (first bit= lsb)
-func (builder *builder) ToBinary(i1 frontend.Variable, n ...int) []frontend.Variable {
+func (builder *Builder) ToBinary(i1 frontend.Variable, n ...int) []frontend.Variable {
 	// nbBits
 	nbBits := builder.cs.FieldBitLen()
 	if len(n) == 1 {
@@ -356,12 +356,12 @@ func (builder *builder) ToBinary(i1 frontend.Variable, n ...int) []frontend.Vari
 }
 
 // FromBinary packs b, seen as a fr.Element in little endian
-func (builder *builder) FromBinary(_b ...frontend.Variable) frontend.Variable {
+func (builder *Builder) FromBinary(_b ...frontend.Variable) frontend.Variable {
 	return bits.FromBinary(builder, _b)
 }
 
 // Xor compute the XOR between two frontend.Variables
-func (builder *builder) Xor(_a, _b frontend.Variable) frontend.Variable {
+func (builder *Builder) Xor(_a, _b frontend.Variable) frontend.Variable {
 
 	vars, _ := builder.toVariables(_a, _b)
 
@@ -389,7 +389,7 @@ func (builder *builder) Xor(_a, _b frontend.Variable) frontend.Variable {
 }
 
 // Or compute the OR between two frontend.Variables
-func (builder *builder) Or(_a, _b frontend.Variable) frontend.Variable {
+func (builder *Builder) Or(_a, _b frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(_a, _b)
 
 	a := vars[0]
@@ -411,7 +411,7 @@ func (builder *builder) Or(_a, _b frontend.Variable) frontend.Variable {
 }
 
 // And compute the AND between two frontend.Variables
-func (builder *builder) And(_a, _b frontend.Variable) frontend.Variable {
+func (builder *Builder) And(_a, _b frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(_a, _b)
 
 	a := vars[0]
@@ -430,7 +430,7 @@ func (builder *builder) And(_a, _b frontend.Variable) frontend.Variable {
 // Conditionals
 
 // Select if i0 is true, yields i1 else yields i2
-func (builder *builder) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
+func (builder *Builder) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
 
 	vars, _ := builder.toVariables(i0, i1, i2)
 	cond := vars[0]
@@ -473,7 +473,7 @@ func (builder *builder) Select(i0, i1, i2 frontend.Variable) frontend.Variable {
 // Lookup2 performs a 2-bit lookup between i1, i2, i3, i4 based on bits b0
 // and b1. Returns i0 if b0=b1=0, i1 if b0=1 and b1=0, i2 if b0=0 and b1=1
 // and i3 if b0=b1=1.
-func (builder *builder) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Variable) frontend.Variable {
+func (builder *Builder) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(b0, b1, i0, i1, i2, i3)
 	s0, s1 := vars[0], vars[1]
 	in0, in1, in2, in3 := vars[2], vars[3], vars[4], vars[5]
@@ -523,7 +523,7 @@ func (builder *builder) Lookup2(b0, b1 frontend.Variable, i0, i1, i2, i3 fronten
 }
 
 // IsZero returns 1 if i1 is zero, 0 otherwise
-func (builder *builder) IsZero(i1 frontend.Variable) frontend.Variable {
+func (builder *Builder) IsZero(i1 frontend.Variable) frontend.Variable {
 	vars, _ := builder.toVariables(i1)
 	a := vars[0]
 	if c, ok := builder.constantValue(a); ok {
@@ -563,7 +563,7 @@ func (builder *builder) IsZero(i1 frontend.Variable) frontend.Variable {
 }
 
 // Cmp returns 1 if i1>i2, 0 if i1=i2, -1 if i1<i2
-func (builder *builder) Cmp(i1, i2 frontend.Variable) frontend.Variable {
+func (builder *Builder) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 
 	nbBits := builder.cs.FieldBitLen()
 	// in AssertIsLessOrEq we omitted comparison against modulus for the left
@@ -596,7 +596,7 @@ func (builder *builder) Cmp(i1, i2 frontend.Variable) frontend.Variable {
 // the print will be done once the R1CS.Solve() method is executed
 //
 // if one of the input is a variable, its value will be resolved avec R1CS.Solve() method is called
-func (builder *builder) Println(a ...frontend.Variable) {
+func (builder *Builder) Println(a ...frontend.Variable) {
 	var log constraint.LogEntry
 
 	// prefix log line with file.go:line
@@ -628,7 +628,7 @@ func (builder *builder) Println(a ...frontend.Variable) {
 	builder.cs.AddLog(log)
 }
 
-func (builder *builder) printArg(log *constraint.LogEntry, sbb *strings.Builder, a frontend.Variable) {
+func (builder *Builder) printArg(log *constraint.LogEntry, sbb *strings.Builder, a frontend.Variable) {
 
 	leafCount, err := schema.Walk(a, tVariable, nil)
 	count := leafCount.Public + leafCount.Secret
@@ -661,7 +661,7 @@ func (builder *builder) printArg(log *constraint.LogEntry, sbb *strings.Builder,
 }
 
 // returns -le, the result is a copy
-func (builder *builder) negateLinExp(l expr.LinearExpression) expr.LinearExpression {
+func (builder *Builder) negateLinExp(l expr.LinearExpression) expr.LinearExpression {
 	res := make(expr.LinearExpression, len(l))
 	copy(res, l)
 	for i := 0; i < len(res); i++ {
@@ -670,11 +670,11 @@ func (builder *builder) negateLinExp(l expr.LinearExpression) expr.LinearExpress
 	return res
 }
 
-func (builder *builder) Compiler() frontend.Compiler {
+func (builder *Builder) Compiler() frontend.Compiler {
 	return builder
 }
 
-func (builder *builder) Commit(v ...frontend.Variable) (frontend.Variable, error) {
+func (builder *Builder) Commit(v ...frontend.Variable) (frontend.Variable, error) {
 
 	// add a random mask to v
 	{
@@ -805,7 +805,7 @@ func (builder *builder) Commit(v ...frontend.Variable) (frontend.Variable, error
 	return res, nil
 }
 
-func (builder *builder) wireIDsToVars(wireIDs ...[]int) []frontend.Variable {
+func (builder *Builder) wireIDsToVars(wireIDs ...[]int) []frontend.Variable {
 	n := 0
 	for i := range wireIDs {
 		n += len(wireIDs[i])
@@ -821,6 +821,6 @@ func (builder *builder) wireIDsToVars(wireIDs ...[]int) []frontend.Variable {
 	return res
 }
 
-func (builder *builder) SetGkrInfo(info constraint.GkrInfo) error {
+func (builder *Builder) SetGkrInfo(info constraint.GkrInfo) error {
 	return builder.cs.AddGkr(info)
 }

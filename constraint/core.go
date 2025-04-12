@@ -333,11 +333,13 @@ func (system *System) VariableToString(vID int) string {
 	nbSecret := system.GetNbSecretVariables()
 
 	if vID < nbPublic {
-		return system.Public[vID]
+		// return system.Public[vID]
+		return fmt.Sprintf("pub_%d", vID) //pub_{ID}
 	}
 	vID -= nbPublic
 	if vID < nbSecret {
-		return system.Secret[vID]
+		// return system.Secret[vID]
+		return fmt.Sprintf("sec_%d", vID) //sec_{ID}
 	}
 	vID -= nbSecret
 	return fmt.Sprintf("v%d", vID) // TODO @gbotrel  vs strconv.Itoa.

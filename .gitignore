@@ -56,3 +56,8 @@ go.work
 go.work.sum
 
 examples/gbotrel/**
+
+fromcircom/circom/**/*.js
+fromcircom/circom/**/*.wasm
+fromcircom/circom/**/*.sym
+fromcircom/circom/**/*.r1cs
