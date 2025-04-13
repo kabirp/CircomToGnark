@@ -36,14 +36,15 @@ func define_circuit(circomCircuitInPath string, gnarkCircuitOutPath string) {
 	log.Println("Defining circuit. circomCircuitInPath=" + circomCircuitInPath +
 		" gnarkCircuitOutPath=" + gnarkCircuitOutPath)
 
-	// Open the input file
+	// Sanity check the input file
 	sectionTypeToMetadata := isFileValid(circomCircuitInPath, R1CSCircuitBinary)
 
 	// Parse the R1CS header section
 	// FIXME: (no need to open file multiple times)
 	circuit := parseR1CSHeaderSection(circomCircuitInPath, sectionTypeToMetadata)
 
-	// Compile the circuit
+	// Compile the circuit - this parses the R1CS constraint section and adds the constraints
+	// The gnarkConstraintSystem is the complete "circuit" with all of the R1CS constraints defined.
 	gnarkConstraintSystem, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit, frontend.IgnoreUnconstrainedInputs())
 	if err != nil {
 		log.Fatalf("Failed to compile circuit: %v", err)
@@ -102,8 +103,16 @@ func import_witness(circomWitnessInPath string, gnarkCircuitInPath string, wtnsO
 		" wtnsOutPath=" + wtnsOutPath +
 		" pubInputsOutPath=" + pubInputsOutPath)
 
-	panic("Import witness not implemented yet")
-	// log.Println("Witness imported successfully.")
+	// Sanity check the input file
+	// FIXME: (no need to open file multiple times)
+	sectionTypeToMetadata := isFileValid(circomWitnessInPath, WitnessBinary)
+
+	nVars := parseWitnessHeader(circomWitnessInPath, sectionTypeToMetadata)
+	values := parseWitness(circomWitnessInPath, sectionTypeToMetadata, nVars)
+
+	_ = values
+
+	log.Println("Witness imported successfully.")
 }
 
 func main() {

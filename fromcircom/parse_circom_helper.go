@@ -34,11 +34,14 @@ const (
 const (
 	R1CSHeaderSection      SectionType = 1
 	R1CSConstraintsSection SectionType = 2
+	WitnessHeaderSection   SectionType = 1
+	WitnessDataSection     SectionType = 2
 )
 
 // Supporting only Groth16 and BN254 for now, so the scalar field size is 32 bytes
 const scalarFieldSizeBytes = 32
-const expectedCircomVersion = 1
+const expectedR1CSVersion = 1
+const expectedWitnessVersion = 2
 const minR1CSSections = 3
 const minWitnessSections = 2
 
@@ -96,18 +99,28 @@ func checkMagicBytes(magicBytes []byte, binaryType BinaryType) {
 			log.Fatal("File does not start with the expected magic bytes")
 		}
 	default:
-		log.Fatal("Unknown file type")
+		log.Fatal("Unknown file type to check magic bytes")
 	}
 }
 
-func checkCircomVersion(versionBytes []byte) {
+func checkCircomVersion(versionBytes []byte, binaryType BinaryType) {
 	if len(versionBytes) != 4 {
 		panic("version bytes are not 4 bytes long")
 	}
 	actualVersion := int(binary.LittleEndian.Uint32(versionBytes))
-	if actualVersion != expectedCircomVersion {
-		log.Fatal("File does not contain the expected version number. Got " +
-			fmt.Sprint(actualVersion) + " expected " + fmt.Sprint(expectedCircomVersion))
+
+	switch binaryType {
+	case R1CSCircuitBinary:
+		if actualVersion != expectedR1CSVersion {
+			log.Fatal("R1CS file does not contain the expected version number")
+		}
+	case WitnessBinary:
+		if actualVersion != expectedWitnessVersion {
+			log.Fatal("Witness file does not contain the expected version number")
+		}
+
+	default:
+		log.Fatal("Unknown file type to check version")
 	}
 }
 
@@ -126,7 +139,7 @@ func checkNSections(nSectionsBytes []byte, binaryType BinaryType) (numSections i
 			log.Fatal("Witness file does not contain the expected number of sections")
 		}
 	default:
-		log.Fatal("Unknown file type")
+		log.Fatal("Unknown file type to check number of sections")
 	}
 	return nSections
 }
@@ -141,8 +154,15 @@ func checkSeenSections(seenSections map[SectionType]SectionMetadata, binaryType 
 		if _, ok := seenSections[R1CSConstraintsSection]; !ok {
 			log.Fatal("R1CS file does not contain the constraints section")
 		}
+	case WitnessBinary:
+		if _, ok := seenSections[WitnessHeaderSection]; !ok {
+			log.Fatal("Witness file does not contain the witness header section")
+		}
+		if _, ok := seenSections[WitnessDataSection]; !ok {
+			log.Fatal("Witness file does not contain the witness data section")
+		}
 	default:
-		log.Fatal("Unknown file type")
+		log.Fatal("Unknown file type to check seen sections")
 	}
 }
 
@@ -184,7 +204,7 @@ func isFileValid(filePath string, binaryType BinaryType) (sectionTypeToMetadata 
 	if err != nil {
 		log.Fatal(err)
 	}
-	checkCircomVersion(buf4)
+	checkCircomVersion(buf4, binaryType)
 
 	// Step 3: Read number of sections
 	nBytesRead, err = f.ReadAt(buf4, currOffset)
@@ -362,18 +382,6 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	return circuitInfo
 }
 
-// func elementFromLEBytes(leBytes []byte) constraint.Element {
-// 	// Reverse to big-endian since big.Int expects big-endian
-// 	beBytes := make([]byte, len(leBytes))
-// 	for i := range leBytes {
-// 		beBytes[len(leBytes)-1-i] = leBytes[i]
-// 	}
-
-// 	// Convert to big.Int and then to fr.Element
-// 	bi := new(big.Int).SetBytes(beBytes)
-// 	constraint.Element.FromBinary
-// }
-
 func (circuit *CircuitInfo) processLinCombo(f *os.File, currOffset int64,
 	builder *frontendr1cs.Builder) (constraint.LinearExpression, int64) {
 	// Read the number of linear expressions
@@ -483,4 +491,88 @@ func leBytesToElement(b []byte) constraint.Element {
 	r[4] = 0
 	r[5] = 0
 	return r
+}
+
+func parseWitnessHeader(witnessPath string, sectionTypeToMetadata map[SectionType]SectionMetadata) (nVars int) {
+	SectionMetadata := sectionTypeToMetadata[WitnessHeaderSection]
+	currOffset := sectionMetadata.startingOffset
+	buf4 := make([]byte, 4)
+	buf8 := make([]byte, 8)
+	buf32 := make([]byte, 32)
+	nBytesRead := 0
+
+	// Step 0: Open the file
+	file, err := os.Open(witnessPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// Step 1: Read field size data
+	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	currOffset += int64(nBytesRead)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fieldSizeBytes := binary.LittleEndian.Uint32(buf4)
+	if fieldSizeBytes != scalarFieldSizeBytes {
+		log.Fatal("The file does not specify the expected field size")
+	}
+	// Step 2: Read field modulus
+	nBytesRead, err = file.ReadAt(buf32, currOffset)
+	currOffset += int64(nBytesRead)
+	if err != nil {
+		log.Fatal(err)
+	}
+	checkFieldModulus(buf32)
+	// Step 3: Read number of variables
+	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	currOffset += int64(nBytesRead)
+	if err != nil {
+		log.Fatal(err)
+	}
+	nVars = int(binary.LittleEndian.Uint32(buf4))
+
+	actualSize := uint64(currOffset) - uint64(sectionMetadata.startingOffset)
+	expectedSize := sectionMetadata.sectionSize
+	if actualSize != expectedSize {
+		log.Fatal("Header section size does not match the expected size. Actual size: " + fmt.Sprint(actualSize) + " Expected size: " + fmt.Sprint(expectedSize))
+	}
+	// Step 4: Return the number of variables
+	return nVars
+}
+
+func parseWitness(witnessPath string, sectionTypeToMetadata map[SectionType]SectionMetadata,
+	nVars int) (values []constraint.Element) {
+	sectionMetadata := sectionMetadataMap[WitnessDataSection]
+	currOffset := sectionMetadata.startingOffset
+	buf4 := make([]byte, 4)
+	buf8 := make([]byte, 8)
+	buf32 := make([]byte, 32)
+	nBytesRead := 0
+
+	// Step 0: Open the file
+	file, err := os.Open(witnessPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	// assert that scalarFieldSizeBytes * nVars == sectionMetadata.sectionSize
+	if scalarFieldSizeBytes*uint32(nVars) != sectionMetadata.sectionSize {
+		log.Fatal("The number of variables does not match the expected size")
+	}
+
+	values = make([]constraint.Element, nVars)
+	for i := 0; i < nVars; i++ {
+		// Read the value
+		nBytesRead, err = file.ReadAt(buf32, currOffset)
+		currOffset += int64(nBytesRead)
+		if err != nil {
+			log.Fatal(err)
+		}
+		value := leBytesToElement(buf32)
+		values[i] = value
+	}
+	return values
 }

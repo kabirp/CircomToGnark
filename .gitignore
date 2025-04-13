@@ -61,3 +61,5 @@ fromcircom/circom/**/*.js
 fromcircom/circom/**/*.wasm
 fromcircom/circom/**/*.sym
 fromcircom/circom/**/*.r1cs
+fromcircom/circom/**/*.json
+fromcircom/circom/**/*.wtns
