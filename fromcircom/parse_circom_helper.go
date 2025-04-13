@@ -177,21 +177,13 @@ func checkFieldModulus(fieldModulusBytes []byte) {
 	}
 }
 
-func isFileValid(filePath string, binaryType BinaryType) (sectionTypeToMetadata map[SectionType]SectionMetadata) {
+func isFileValid(f *os.File, binaryType BinaryType) (sectionTypeToMetadata map[SectionType]SectionMetadata) {
 	currOffset := int64(0)
 	buf4 := make([]byte, 4)
 	buf8 := make([]byte, 8)
-	nBytesRead := 0
-
-	// Step 0: Open the file
-	f, err := os.Open(filePath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
 
 	// Step 1: Ensure the file starts with the magic bytes
-	nBytesRead, err = f.ReadAt(buf4, currOffset)
+	nBytesRead, err := f.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -262,23 +254,16 @@ func isFileValid(filePath string, binaryType BinaryType) (sectionTypeToMetadata 
 }
 
 // Note: Does not close the file handle
-func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[SectionType]SectionMetadata) CircuitInfo {
+func parseR1CSHeaderSection(circomR1csFile *os.File, sectionMetadataMap map[SectionType]SectionMetadata,
+	circomR1csPath string) CircuitInfo {
 	sectionMetadata := sectionMetadataMap[R1CSHeaderSection]
 	currOffset := sectionMetadata.startingOffset
 	buf4 := make([]byte, 4)
 	buf8 := make([]byte, 8)
 	buf32 := make([]byte, 32)
-	nBytesRead := 0
-
-	// Step 0: Open the file
-	file, err := os.Open(circomR1csPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
 
 	// Step 1: Read field size data
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err := circomR1csFile.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -288,7 +273,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 		log.Fatal("The file does not specify the expected field size")
 	}
 	// Step 2: Read field modulus
-	nBytesRead, err = file.ReadAt(buf32, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf32, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -296,7 +281,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	checkFieldModulus(buf32)
 
 	// Step 3: Read number of variables
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -304,7 +289,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	nVariables := int(binary.LittleEndian.Uint32(buf4))
 
 	// Step 4: Read number of public outputs
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -312,7 +297,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	nPubOut := int(binary.LittleEndian.Uint32(buf4))
 
 	// Step 5: Read number of public inputs
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -324,7 +309,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	}
 
 	// Step 6: Read number of private inputs
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -337,7 +322,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	}
 
 	// Step 7: Read number of labels
-	nBytesRead, err = file.ReadAt(buf8, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf8, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -350,7 +335,7 @@ func parseR1CSHeaderSection(circomR1csPath string, sectionMetadataMap map[Sectio
 	}
 
 	// Step 8: Read number of constraints
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err = circomR1csFile.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -493,23 +478,14 @@ func leBytesToElement(b []byte) constraint.Element {
 	return r
 }
 
-func parseWitnessHeader(witnessPath string, sectionTypeToMetadata map[SectionType]SectionMetadata) (nVars int) {
-	SectionMetadata := sectionTypeToMetadata[WitnessHeaderSection]
+func parseWitnessHeader(file *os.File, sectionTypeToMetadata map[SectionType]SectionMetadata) (nVars int) {
+	sectionMetadata := sectionTypeToMetadata[WitnessHeaderSection]
 	currOffset := sectionMetadata.startingOffset
 	buf4 := make([]byte, 4)
-	buf8 := make([]byte, 8)
 	buf32 := make([]byte, 32)
-	nBytesRead := 0
-
-	// Step 0: Open the file
-	file, err := os.Open(witnessPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
 
 	// Step 1: Read field size data
-	nBytesRead, err = file.ReadAt(buf4, currOffset)
+	nBytesRead, err := file.ReadAt(buf4, currOffset)
 	currOffset += int64(nBytesRead)
 	if err != nil {
 		log.Fatal(err)
@@ -542,31 +518,21 @@ func parseWitnessHeader(witnessPath string, sectionTypeToMetadata map[SectionTyp
 	return nVars
 }
 
-func parseWitness(witnessPath string, sectionTypeToMetadata map[SectionType]SectionMetadata,
+func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetadata,
 	nVars int) (values []constraint.Element) {
 	sectionMetadata := sectionMetadataMap[WitnessDataSection]
 	currOffset := sectionMetadata.startingOffset
-	buf4 := make([]byte, 4)
-	buf8 := make([]byte, 8)
 	buf32 := make([]byte, 32)
-	nBytesRead := 0
-
-	// Step 0: Open the file
-	file, err := os.Open(witnessPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
 
 	// assert that scalarFieldSizeBytes * nVars == sectionMetadata.sectionSize
-	if scalarFieldSizeBytes*uint32(nVars) != sectionMetadata.sectionSize {
+	if scalarFieldSizeBytes*uint64(nVars) != sectionMetadata.sectionSize {
 		log.Fatal("The number of variables does not match the expected size")
 	}
 
 	values = make([]constraint.Element, nVars)
 	for i := 0; i < nVars; i++ {
 		// Read the value
-		nBytesRead, err = file.ReadAt(buf32, currOffset)
+		nBytesRead, err := file.ReadAt(buf32, currOffset)
 		currOffset += int64(nBytesRead)
 		if err != nil {
 			log.Fatal(err)

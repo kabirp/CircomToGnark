@@ -36,20 +36,31 @@ func define_circuit(circomCircuitInPath string, gnarkCircuitOutPath string) {
 	log.Println("Defining circuit. circomCircuitInPath=" + circomCircuitInPath +
 		" gnarkCircuitOutPath=" + gnarkCircuitOutPath)
 
+	// Open input file
+	circomR1csFile, err := os.Open(circomCircuitInPath)
+	if err != nil {
+		log.Fatalf("Failed to open circom circuit input file: %v", err)
+	}
+
 	// Sanity check the input file
-	sectionTypeToMetadata := isFileValid(circomCircuitInPath, R1CSCircuitBinary)
+	sectionTypeToMetadata := isFileValid(circomR1csFile, R1CSCircuitBinary)
 
 	// Parse the R1CS header section
-	// FIXME: (no need to open file multiple times)
-	circuit := parseR1CSHeaderSection(circomCircuitInPath, sectionTypeToMetadata)
+	circuit := parseR1CSHeaderSection(circomR1csFile, sectionTypeToMetadata, circomCircuitInPath)
+
+	// Close the input file
+	circomR1csFile.Close()
 
 	// Compile the circuit - this parses the R1CS constraint section and adds the constraints
 	// The gnarkConstraintSystem is the complete "circuit" with all of the R1CS constraints defined.
+	// This will again open/close the circomR1csFile file. This reopening is necessary because the frontend.Circuit
+	// cannot take the fileHandle in its struct, or the schema walk will complain about 'unsupported type: unsafe pointer'.
 	gnarkConstraintSystem, err := frontend.Compile(ecc.BN254.ScalarField(), r1cs.NewBuilder, &circuit, frontend.IgnoreUnconstrainedInputs())
 	if err != nil {
-		log.Fatalf("Failed to compile circuit: %v", err)
+		log.Fatalf("Failed to compile circuit and create gnark Constraint system: %v", err)
 	}
 
+	// Create the output file, write the new gnark constraint system to it, and close the file
 	outFile, err := os.Create(gnarkCircuitOutPath)
 	if err != nil {
 		log.Fatalf("Failed to create gnark circuit output file: %v", err)
@@ -103,12 +114,37 @@ func import_witness(circomWitnessInPath string, gnarkCircuitInPath string, wtnsO
 		" wtnsOutPath=" + wtnsOutPath +
 		" pubInputsOutPath=" + pubInputsOutPath)
 
-	// Sanity check the input file
-	// FIXME: (no need to open file multiple times)
-	sectionTypeToMetadata := isFileValid(circomWitnessInPath, WitnessBinary)
+	// Open input files
+	inWitFile, err := os.Open(circomWitnessInPath)
+	if err != nil {
+		log.Fatalf("Failed to open circom witness file: %v", err)
+	}
+	defer inWitFile.Close()
+	gnarkCircuitInFile, err := os.Open(gnarkCircuitInPath)
+	if err != nil {
+		log.Fatalf("Failed to open gnark circuit input file: %v", err)
+	}
+	var gnarkConstraintSystem constraint.ConstraintSystem = groth16.NewCS(ecc.BN254)
+	gnarkConstraintSystem.ReadFrom(gnarkCircuitInFile)
+	gnarkCircuitInFile.Close()
 
-	nVars := parseWitnessHeader(circomWitnessInPath, sectionTypeToMetadata)
-	values := parseWitness(circomWitnessInPath, sectionTypeToMetadata, nVars)
+	n_internal, n_secret, n_public := gnarkConstraintSystem.GetNbVariables()
+	if n_internal != 0 {
+		panic("The way we designed the circuit, there should be no internal variables")
+	}
+	totalNumVariables := n_internal + n_secret + n_public
+
+	// Sanity check the input file
+	sectionTypeToMetadata := isFileValid(inWitFile, WitnessBinary)
+
+	// Ensure the number of wire assignments witness file is valid w.r.t. the circuit
+	nVars := parseWitnessHeader(inWitFile, sectionTypeToMetadata)
+	if nVars != totalNumVariables {
+		log.Fatalf("The number of variables in the witness file (%d) does not match the number of variables in the circuit (%d)", nVars, totalNumVariables)
+	}
+
+	// Create the output files
+	values := parseWitness(inWitFile, sectionTypeToMetadata, nVars)
 
 	_ = values
 

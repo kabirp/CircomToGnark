@@ -5,7 +5,7 @@ package r1cs
 
 import (
 	"errors"
-	"fmt"
+	"log"
 	"math/big"
 	"reflect"
 	"sort"
@@ -33,6 +33,9 @@ import (
 	"github.com/consensys/gnark/constraint/solver"
 	tinyfieldr1cs "github.com/consensys/gnark/constraint/tinyfield"
 )
+
+// TODO: Make this an environment variable instead
+const PRINT_R1CS = true
 
 // NewBuilder returns a new R1CS builder which implements frontend.API.
 // Additionally, this builder also implements [frontend.Committer].
@@ -272,7 +275,10 @@ func (builder *Builder) Compile() (constraint.ConstraintSystem, error) {
 		}
 	}
 
-	builder.PrintR1CS()
+	if PRINT_R1CS {
+		log.Println("Printing R1CS:")
+		builder.PrintR1CS()
+	}
 	return builder.cs, nil
 }
 
@@ -514,7 +520,7 @@ func (builder *Builder) PrintR1CS() {
 	constraints := builder.cs.GetR1Cs()
 
 	for _, r1c := range constraints {
-		fmt.Println(r1c.String(builder.cs))
+		log.Println(r1c.String(builder.cs))
 		// for more granularity use constraint.NewStringBuilder(r) that embeds a string.Builder
 		// and has WriteLinearExpression and WriteTerm methods.
 	}
