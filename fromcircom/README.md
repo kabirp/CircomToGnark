@@ -75,6 +75,8 @@ Place this file in: `fromcircom/circom/simple_circom_circuit`
 
 ## Running an Example
 
+First, you will have to update line 3 of the top level directory's go.mod file appropriate. 
+
 ### Setup
 
 ```bash
