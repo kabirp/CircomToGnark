@@ -6,7 +6,9 @@ import (
 	"os"
 
 	"github.com/consensys/gnark-crypto/ecc"
+	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
 	"github.com/consensys/gnark/backend/groth16"
+	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 	"github.com/consensys/gnark/frontend/cs/r1cs"
@@ -27,7 +29,7 @@ const (
 	DefineCircuitUsage = "define_circuit <circomCircuitInPath> <gnarkCircuitOutPath>"
 	SetupCircuitUsage  = "setup_circuit <gnarkCircuitInPath> <pkOutPath> <vkOutPath>"
 	ImportWitnessUsage = "import_witness <circomWitnessInPath> <gnarkCircuitInPath> <wtnsOutPath> <pubInputsOutPath>"
-	ProveUsage         = "prove <pkInPath> <wtnsInPath> <proofOutPath>"
+	ProveUsage         = "prove <gnarkCircuitInPath> <pkInPath> <wtnsInPath> <proofOutPath>"
 	VerifyUsage        = "verify <vkInPath> <proofInPath> <pubInputsInPath>"
 )
 
@@ -144,15 +146,137 @@ func import_witness(circomWitnessInPath string, gnarkCircuitInPath string, wtnsO
 	}
 
 	// Create the output files
-	witness := parseWitness(inWitFile, sectionTypeToMetadata, nPublic, nSecret)
+	fullWitness, publicWitness := parseWitness(inWitFile, sectionTypeToMetadata, nPublic, nSecret)
 
 	// Sanity check that hte constraints and witness are compatible
-	err = gnarkConstraintSystem.IsSolved(witness)
+	err = gnarkConstraintSystem.IsSolved(fullWitness)
 	if err != nil {
 		log.Fatalf("The witness does not satisfy the circuit: %v", err)
 	}
 
-	log.Println("Witness imported successfully. TODO: write to file")
+	// Write the witness to the output file
+	wtnsOutFile, err := os.Create(wtnsOutPath)
+	if err != nil {
+		log.Fatalf("Failed to create witness output file: %v", err)
+	}
+	_, err = fullWitness.WriteTo(wtnsOutFile)
+	if err != nil {
+		log.Fatalf("Failed to write witness to output file: %v", err)
+	}
+	wtnsOutFile.Close()
+
+	// Write the public inputs to the output file
+	pubInputsOutFile, err := os.Create(pubInputsOutPath)
+	if err != nil {
+		log.Fatalf("Failed to create public inputs output file: %v", err)
+	}
+	_, err = publicWitness.WriteTo(pubInputsOutFile)
+	if err != nil {
+		log.Fatalf("Failed to write public inputs to output file: %v", err)
+	}
+	pubInputsOutFile.Close()
+
+	log.Println("Witness imported successfully.")
+}
+
+func prove(gnarkCircuitInPath, pkInPath, wtnsInPath, proofOutPath string) {
+	// Load prover key, witness, and gnark circuit
+	gnarkCircuitInFile, err := os.Open(gnarkCircuitInPath)
+	if err != nil {
+		log.Fatalf("Failed to open gnark circuit input file: %v", err)
+	}
+	var gnarkConstraintSystem constraint.ConstraintSystem = groth16.NewCS(ecc.BN254)
+	gnarkConstraintSystem.ReadFrom(gnarkCircuitInFile)
+	gnarkCircuitInFile.Close()
+
+	pkFile, err := os.Open(pkInPath)
+	if err != nil {
+		log.Fatalf("Failed to open pk input file: %v", err)
+	}
+	pk := groth16.NewProvingKey(ecc.BN254)
+	_, err = pk.ReadFrom(pkFile)
+	if err != nil {
+		log.Fatalf("Failed to read pk from input file: %v", err)
+	}
+	pkFile.Close()
+
+	wtnsInFile, err := os.Open(wtnsInPath)
+	if err != nil {
+		log.Fatalf("Failed to open witness input file: %v", err)
+	}
+	witness, err := witness.New(fr.Modulus())
+	if err != nil {
+		log.Fatalf("Failed to create new witness: %v", err)
+	}
+	_, err = witness.ReadFrom(wtnsInFile)
+	if err != nil {
+		log.Fatalf("Failed to read witness from input file: %v", err)
+	}
+	wtnsInFile.Close()
+
+	// Prove the circuit
+	proof, err := groth16.Prove(gnarkConstraintSystem, pk, witness)
+	if err != nil {
+		log.Fatalf("Failed to prove circuit: %v", err)
+	}
+
+	// Write the proof to the output file
+	proofOutFile, err := os.Create(proofOutPath)
+	if err != nil {
+		log.Fatalf("Failed to create proof output file: %v", err)
+	}
+	_, err = proof.WriteTo(proofOutFile)
+	if err != nil {
+		log.Fatalf("Failed to write proof to output file: %v", err)
+	}
+	proofOutFile.Close()
+	log.Println("Proof generated successfully.")
+}
+
+func verify(vkInPath string, proofInPath string, pubInputsInPath string) {
+	// Load verifier key, proof, and public inputs
+	vkFile, err := os.Open(vkInPath)
+	if err != nil {
+		log.Fatalf("Failed to open vk input file: %v", err)
+	}
+	vk := groth16.NewVerifyingKey(ecc.BN254)
+	_, err = vk.ReadFrom(vkFile)
+	if err != nil {
+		log.Fatalf("Failed to read vk from input file: %v", err)
+	}
+	vkFile.Close()
+
+	proofFile, err := os.Open(proofInPath)
+	if err != nil {
+		log.Fatalf("Failed to open proof input file: %v", err)
+	}
+	proof := groth16.NewProof(ecc.BN254)
+	_, err = proof.ReadFrom(proofFile)
+	if err != nil {
+		log.Fatalf("Failed to read proof from input file: %v", err)
+	}
+	proofFile.Close()
+
+	pubInputsFile, err := os.Open(pubInputsInPath)
+	if err != nil {
+		log.Fatalf("Failed to open public inputs input file: %v", err)
+	}
+	publicWitness, err := witness.New(fr.Modulus())
+	if err != nil {
+		log.Fatalf("Failed to create new public witness: %v", err)
+	}
+	_, err = publicWitness.ReadFrom(pubInputsFile)
+	if err != nil {
+		log.Fatalf("Failed to read public witness from input file: %v", err)
+	}
+	pubInputsFile.Close()
+
+	// Verify the proof
+	err = groth16.Verify(proof, vk, publicWitness)
+	if err != nil {
+		log.Fatalf("Proof verification failed: %v", err)
+	}
+	log.Println("Proof verified successfully.")
 }
 
 func main() {
@@ -177,6 +301,26 @@ func main() {
 			os.Exit(1)
 		}
 		import_witness(os.Args[2], os.Args[3], os.Args[4], os.Args[5])
+	case ProveCommand:
+		if len(os.Args) != 6 {
+			fmt.Println("Incorrect Usage. Expected Usage: " + ProveUsage)
+			os.Exit(1)
+		}
+		prove(os.Args[2], os.Args[3], os.Args[4], os.Args[5])
+	case VerifyCommand:
+		if len(os.Args) != 5 {
+			fmt.Println("Incorrect Usage. Expected Usage: " + VerifyUsage)
+			os.Exit(1)
+		}
+		verify(os.Args[2], os.Args[3], os.Args[4])
+	case "help":
+		fmt.Println("Supported commands: " + SupportedCommands)
+		fmt.Println("Usage:")
+		fmt.Println(DefineCircuitUsage)
+		fmt.Println(SetupCircuitUsage)
+		fmt.Println(ImportWitnessUsage)
+		fmt.Println(ProveUsage)
+		fmt.Println(VerifyUsage)
 	default:
 		fmt.Println("Unknown command:", command)
 		fmt.Println("Supported commands:" + SupportedCommands)

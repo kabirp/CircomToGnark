@@ -520,7 +520,7 @@ func parseWitnessHeader(file *os.File, sectionTypeToMetadata map[SectionType]Sec
 }
 
 func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetadata,
-	nPublic int, nSecret int) witness.Witness {
+	nPublic int, nSecret int) (fullWitness witness.Witness, pubWitness witness.Witness) {
 	sectionMetadata := sectionMetadataMap[WitnessDataSection]
 	currOffset := sectionMetadata.startingOffset
 	buf32 := make([]byte, 32)
@@ -531,7 +531,8 @@ func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetad
 		log.Fatal("The number of variables does not match the expected size")
 	}
 
-	values := make(chan any, nVars)
+	fullWitnessValues := make(chan any, nVars)
+	publicWitnessValues := make(chan any, nPublic)
 	for i := 0; i < nVars; i++ {
 		// Read the value
 		nBytesRead, err := file.ReadAt(buf32, currOffset)
@@ -543,13 +544,23 @@ func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetad
 		if i == 0 {
 			continue //skip the first value
 		}
-		values <- value
+		fullWitnessValues <- value
+		if i < nPublic {
+			publicWitnessValues <- value
+		}
 	}
-	// Close the channel
-	close(values)
+	// Close the channels
+	close(fullWitnessValues)
+	close(publicWitnessValues)
 
 	// Create a new witness
-	wit, err := witness.New(fr.Modulus())
+	fullWitness, err := witness.New(fr.Modulus())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create the public witness
+	pubWitness, err = witness.New(fr.Modulus())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -557,10 +568,18 @@ func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetad
 	// Set the values in the witness
 	// We subtract one to account for the fact that the first value is hardcoded to 1 in R1CS
 	// See the code in constraint/bn254/solver.go#newSolver to understand this.
-	err = wit.Fill(nPublic-1, nSecret, values)
+	err = fullWitness.Fill(nPublic-1, nSecret, fullWitnessValues)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return wit
+	// Set the values in the public witness
+	// We subtract one to account for the fact that the first value is hardcoded to 1 in R1CS
+	// See the code in constraint/bn254/solver.go#newSolver to understand this.
+	err = pubWitness.Fill(nPublic-1, 0, publicWitnessValues)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return fullWitness, pubWitness
 }
