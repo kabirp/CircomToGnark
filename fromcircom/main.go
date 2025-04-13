@@ -128,11 +128,11 @@ func import_witness(circomWitnessInPath string, gnarkCircuitInPath string, wtnsO
 	gnarkConstraintSystem.ReadFrom(gnarkCircuitInFile)
 	gnarkCircuitInFile.Close()
 
-	n_internal, n_secret, n_public := gnarkConstraintSystem.GetNbVariables()
-	if n_internal != 0 {
+	nInternal, nSecret, nPublic := gnarkConstraintSystem.GetNbVariables()
+	if nInternal != 0 {
 		panic("The way we designed the circuit, there should be no internal variables")
 	}
-	totalNumVariables := n_internal + n_secret + n_public
+	totalNumVariables := nInternal + nSecret + nPublic
 
 	// Sanity check the input file
 	sectionTypeToMetadata := isFileValid(inWitFile, WitnessBinary)
@@ -144,11 +144,15 @@ func import_witness(circomWitnessInPath string, gnarkCircuitInPath string, wtnsO
 	}
 
 	// Create the output files
-	values := parseWitness(inWitFile, sectionTypeToMetadata, nVars)
+	witness := parseWitness(inWitFile, sectionTypeToMetadata, nPublic, nSecret)
 
-	_ = values
+	// Sanity check that hte constraints and witness are compatible
+	err = gnarkConstraintSystem.IsSolved(witness)
+	if err != nil {
+		log.Fatalf("The witness does not satisfy the circuit: %v", err)
+	}
 
-	log.Println("Witness imported successfully.")
+	log.Println("Witness imported successfully. TODO: write to file")
 }
 
 func main() {

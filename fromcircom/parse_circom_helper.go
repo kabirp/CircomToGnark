@@ -16,6 +16,7 @@ import (
 	"fmt"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
+	"github.com/consensys/gnark/backend/witness"
 	"github.com/consensys/gnark/constraint"
 	"github.com/consensys/gnark/frontend"
 
@@ -519,17 +520,18 @@ func parseWitnessHeader(file *os.File, sectionTypeToMetadata map[SectionType]Sec
 }
 
 func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetadata,
-	nVars int) (values []constraint.Element) {
+	nPublic int, nSecret int) witness.Witness {
 	sectionMetadata := sectionMetadataMap[WitnessDataSection]
 	currOffset := sectionMetadata.startingOffset
 	buf32 := make([]byte, 32)
+	nVars := nPublic + nSecret
 
 	// assert that scalarFieldSizeBytes * nVars == sectionMetadata.sectionSize
 	if scalarFieldSizeBytes*uint64(nVars) != sectionMetadata.sectionSize {
 		log.Fatal("The number of variables does not match the expected size")
 	}
 
-	values = make([]constraint.Element, nVars)
+	values := make(chan any, nVars)
 	for i := 0; i < nVars; i++ {
 		// Read the value
 		nBytesRead, err := file.ReadAt(buf32, currOffset)
@@ -537,8 +539,28 @@ func parseWitness(file *os.File, sectionMetadataMap map[SectionType]SectionMetad
 		if err != nil {
 			log.Fatal(err)
 		}
-		value := leBytesToElement(buf32)
-		values[i] = value
+		value := leBytesToBigInt(buf32)
+		if i == 0 {
+			continue //skip the first value
+		}
+		values <- value
 	}
-	return values
+	// Close the channel
+	close(values)
+
+	// Create a new witness
+	wit, err := witness.New(fr.Modulus())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Set the values in the witness
+	// We subtract one to account for the fact that the first value is hardcoded to 1 in R1CS
+	// See the code in constraint/bn254/solver.go#newSolver to understand this.
+	err = wit.Fill(nPublic-1, nSecret, values)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return wit
 }
