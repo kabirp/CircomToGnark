@@ -9,9 +9,11 @@
 
 ## Motivation
 
-- Circom is great for defining R1CS circuits—especially with its robust library ecosystem.
-- The gnark prover is significantly faster than Circom's.
-- Goal: Combine Circom's ergonomics with gnark's performance.
+- Many SNARK proof systems use a similar frontend representation.
+- Numerous systems target R1CS arithmetization over the BN254 scalar field.
+- Ideally, you should be able to write BN254-based R1CS circuits in one library and prove them with a different library.
+- This separation enables benchmarking the efficiency of different backend provers using the exact same R1CS.
+- Keep in mind that the same arithmetic circuit can be arithmetized into R1CS in multiple ways. Some libraries may design their frontends specifically so that the backend prover can exploit particular structures in the resulting R1CS instances.
 
 **Note:** This library currently supports only **Groth16 over BN254**.
 
@@ -105,3 +107,12 @@ do_prove
 ```bash
 do_verify
 ```
+
+## Notes
+
+Thanks to [Kobi Gurkan](https://github.com/kobigurk) for pointing out that there has been similar work along these lines. For related efforts, see:
+
+- [zkinterface by QED-it](https://github.com/QED-it/zkinterface)
+- [circom-compat by arkworks-rs](https://github.com/arkworks-rs/circom-compat)
+
+The gnark team mentioned that they may soon implement this functionality natively, so stay tuned for that! Until then, feel free to use this as you please.
