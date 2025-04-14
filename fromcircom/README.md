@@ -110,9 +110,15 @@ do_verify
 
 ## Notes
 
-Thanks to [Kobi Gurkan](https://github.com/kobigurk) for pointing out that there has been similar work along these lines. For related efforts, see:
+Thanks to [Kobi Gurkan](https://github.com/kobigurk) for pointing out prior work in this area. For related efforts, see:
 
 - [zkinterface by QED-it](https://github.com/QED-it/zkinterface)
 - [circom-compat by arkworks-rs](https://github.com/arkworks-rs/circom-compat)
 
-The gnark team mentioned that they may soon implement this functionality natively, so stay tuned for that! Until then, feel free to use this as you please.
+The gnark team has mentioned plans to support this functionality natively—so keep an eye out for future updates. 
+In the meantime, feel free to use this tool however you’d like.
+
+**Update:** [Vocdoni](https://github.com/vocdoni) has a project called [circom2gnark](https://github.com/vocdoni/circom2gnark), 
+which enables verification of Circom proofs within gnark. 
+Their tool parses proofs and verifier keys from Circom/SnarkJS, but its focus is different: it aims to verify proofs, 
+whereas this project is focused on enabling gnark to *prove* Circom circuits.
