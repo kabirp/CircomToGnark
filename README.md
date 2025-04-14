@@ -1,3 +1,13 @@
+# Important Update
+
+**This project is no longer maintained here. Please see the updated and improved version of this project at:**
+
+[GnarkProveCircomCircuit](https://github.com/kabirp/GnarkProveCircomCircuit)
+
+---
+
+*(The rest of the README continues below.)*
+
 # `gnark` zk-SNARK library
 
 [![Twitter URL](https://img.shields.io/twitter/url/https/twitter.com/gnark_team.svg?style=social&label=Follow%20%40gnark_team)](https://twitter.com/gnark_team) [![License](https://img.shields.io/badge/license-Apache%202-blue)](LICENSE)
